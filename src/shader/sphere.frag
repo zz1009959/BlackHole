@@ -9,14 +9,5 @@ uniform samplerCube skybox;
 
 void main()
 {
-//    vec3 I = normalize(Position - cameraPos);   // 观察方向
-//    vec3 R = reflect(I, normalize(Normal));     // 反射方向
-//    FragColor = vec4(texture(skybox, R).rgb, 1.0);
-
-//    float ratio = 1.00 / 1.52;
-//    vec3 I = normalize(Position - cameraPos);
-//    vec3 R = refract(I, normalize(Normal), ratio);
-//    FragColor = vec4(texture(skybox, R).rgb, 1.0);
-
-    FragColor = vec4(0.0, 0.0, 0.0, 1.0);
+    FragColor = vec4(1.0, 1.0, 1.0, 1.0);
 }
