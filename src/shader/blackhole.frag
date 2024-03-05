@@ -30,6 +30,7 @@ struct Sphere
 
 uniform samplerCube skybox; // 天空盒纹理
 
+// 四元数旋转
 vec3 rotateVectorUsingQuaternion(vec3 position, vec3 axis, float angle)
 {
     // 根据轴和角度创建四元数
@@ -60,6 +61,19 @@ vec3 rotateVectorUsingQuaternion(vec3 position, vec3 axis, float angle)
 
     // 返回结果向量
     return result.xyz;
+}
+// 罗德里格斯公式
+vec3 rotateVectorUsingRodrigues(vec3 position, vec3 axis, float angle)
+{
+    // 将角度转换为弧度
+    float radians = angle * PI / 180.0;
+
+    // 计算旋转后的向量
+    vec3 rotatedVector = position * cos(radians) +
+                         cross(axis, position) * sin(radians) +
+                         axis * dot(axis, position) * (1.0 - cos(radians));
+
+    return rotatedVector;
 }
 
 mat3 lookAt(vec3 origin, vec3 target, float roll)
@@ -125,7 +139,7 @@ void main()
     else
     {
         // 如果光线和球体不相交，计算天空盒的颜色
-        dir = rotateVectorUsingQuaternion(dir, vec3(0.0, 1.0, 0.0), time);
+        dir = rotateVectorUsingRodrigues(dir, vec3(0.0, 1.0, 0.0), time);
         vec3 skyboxColor = texture(skybox, dir).rgb;
         FragColor = vec4(skyboxColor, 1.0);
     }
