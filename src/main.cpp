@@ -21,7 +21,6 @@
 
 void framebuffer_size_callback(GLFWwindow* window, int width, int height);
 void mouse_callback(GLFWwindow* window, double xpos, double ypos);
-void scroll_callback(GLFWwindow* window, double xoffset, double yoffset);
 void processInput(GLFWwindow* window);
 unsigned int loadTexture(char const* path);
 unsigned int loadCubemap(std::vector<std::string> faces);
@@ -54,7 +53,8 @@ int main()
     glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);//使用的是核心模式(Core-profile)，只能使用OpenGL功能的一个子集
 
     //创建窗口对象
-    GLFWwindow* window = glfwCreateWindow(SCR_WIDTH, SCR_HEIGHT, "LearnOpenGL", NULL, NULL);
+    //glfwWindowHint(GLFW_DECORATED, GLFW_FALSE); // 配置窗口参数，不显示窗口边框
+    GLFWwindow* window = glfwCreateWindow(SCR_WIDTH, SCR_HEIGHT, "BlackHole", NULL, NULL);
     if (window == NULL)
     {
         std::cout << "Failed to create GLFW window" << std::endl;
@@ -64,7 +64,7 @@ int main()
     glfwMakeContextCurrent(window);
     glfwSetFramebufferSizeCallback(window, framebuffer_size_callback);//注册窗口变换监听函数
     glfwSetCursorPosCallback(window, mouse_callback);//鼠标移动
-    glfwSetScrollCallback(window, scroll_callback);//鼠标滚轮滚动
+    glfwSwapInterval(1); // 启用垂直同步，控制帧率
 
     glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_NORMAL);// 隐藏光标
 
@@ -92,28 +92,11 @@ int main()
     ImGui_ImplGlfw_InitForOpenGL(window, true);
     ImGui_ImplOpenGL3_Init(glsl_version);
 
-    Shader ourShader("./src/shader/sphere.vert", "./src/shader/sphere.frag");
-    Shader skyboxShader("./src/shader/skybox.vert", "./src/shader/skybox.frag");
-    Shader sphereShader("./src/shader/simple.vert", "./src/shader/blackhole.frag");
-
-    // 立方体VAO
-    GLuint cubeVAO = setCubeVAO();
-
-    // 天空盒 VAO
-    GLuint skyboxVAO = setSkyBoxVAO();
-
-    // 球体
-    GLuint VAO = setSphereVAO();
+    Shader BlackHoleShader("./src/shader/simple.vert", "./src/shader/blackhole.frag");
 
     // 四边形
     GLuint quadVAO = setQuadVAO();
 
-    //解绑VAO和VBO
-    glBindBuffer(GL_ARRAY_BUFFER, 0);
-    glBindVertexArray(0);
-
-    // 加载纹理
-    //unsigned int cubeTexture = loadTexture("./image/container.jpg");
     std::vector<std::string> faces
     {
         "./assets/skybox_nebula_dark/right.png",
@@ -124,16 +107,29 @@ int main()
         "./assets/skybox_nebula_dark/back.png"
     };
     unsigned int cubemapTexture = loadCubemap(faces);
+    GLuint colorMap = loadTexture("./assets/color_map.png");
 
     // 设置纹理
-    skyboxShader.use();
-    skyboxShader.setInt("skybox", 0);
-    sphereShader.use();
-    sphereShader.setInt("skybox", 0);
+    BlackHoleShader.use();
+    BlackHoleShader.setInt("skybox", 0);
+    glActiveTexture(GL_TEXTURE1);
+    BlackHoleShader.setInt("colorMap", 1);
 
-    //imgui测试值
+    //imgui值
     ImVec4 clear_color = ImVec4(0.1, 0.1, 0.1, 1.0);
     float speed = 1.0;
+    float adiskHeight = 0.2;
+    float adiskLit = 0.5;
+    float adiskDensityV = 2.0;
+    float adiskDensityH = 4.0;
+    float adiskNoiseScale = 1;
+    float adiskNoiseLOD = 5.0;
+    float adiskSpeed = 0.5;
+    bool renderBlackHole = true;
+    bool gravatationalLensing = true;
+    bool adiskEnabled = true;
+    bool adiskParticle = true;
+    bool mouseControl = true;
     glEnable(GL_DEPTH_TEST);
     while (!glfwWindowShouldClose(window))
     {
@@ -152,44 +148,52 @@ int main()
         ImGui::Begin("ImGui");
         ImGui::ColorEdit3("clear color", (float*)&clear_color);
         ImGui::SliderFloat("Sky Speed", &speed, -2.0, 2.0);
-        ImGui::Text("Application average %.3f ms/frame (%.1f FPS)", 1000.0f / ImGui::GetIO().Framerate, ImGui::GetIO().Framerate);
+
+        ImGui::SliderFloat("adiskHeight", &adiskHeight, 0.1, 0.3);
+        ImGui::SliderFloat("adiskLit", &adiskLit, 0.1, 1.0);
+        ImGui::SliderFloat("adiskDensityV", &adiskDensityV, 1.0, 3.0);
+        ImGui::SliderFloat("adiskDensityH", &adiskDensityH, 3.0, 5.0);
+        ImGui::SliderFloat("adiskNoiseScale", &adiskNoiseScale, 0.5, 2.0);
+        ImGui::SliderFloat("adiskNoiseLOD", &adiskNoiseLOD, 3.0, 7.0);
+        ImGui::SliderFloat("adiskSpeed", &adiskSpeed, 0.1, 1);
+        ImGui::Checkbox("renderBlackHole", &renderBlackHole);
+        ImGui::Checkbox("gravatationalLensing", &gravatationalLensing);
+        ImGui::Checkbox("adiskEnabled", &adiskEnabled);
+        ImGui::Checkbox("adiskParticle", &adiskParticle);
+        ImGui::Checkbox("mouseControl", &mouseControl);
+
+        BlackHoleShader.use();
+        BlackHoleShader.setFloat("renderBlackHole", renderBlackHole);
+        BlackHoleShader.setFloat("gravatationalLensing", gravatationalLensing);
+        BlackHoleShader.setFloat("adiskEnabled", adiskEnabled);
+
+        BlackHoleShader.setFloat("adiskHeight", adiskHeight);
+        BlackHoleShader.setFloat("adiskLit", adiskLit);
+        BlackHoleShader.setFloat("adiskDensityV", adiskDensityV);
+        BlackHoleShader.setFloat("adiskDensityH", adiskDensityH);
+        BlackHoleShader.setFloat("adiskNoiseScale", adiskNoiseScale);
+        BlackHoleShader.setFloat("adiskNoiseLOD", adiskNoiseLOD);
+        BlackHoleShader.setFloat("adiskSpeed", adiskSpeed);
+
+        BlackHoleShader.setFloat("mouseControl", mouseControl);
+
+        /*ImGui::Text("Application average %.3f ms/frame (%.1f FPS)", 1000.0f / ImGui::GetIO().Framerate, ImGui::GetIO().Framerate);*/
         ImGui::End();
 
-        // 渲染指令
         // ---------------
 
         glClearColor(clear_color.x, clear_color.y, clear_color.z, clear_color.w);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-        // sphere
-        glm::mat4 model = glm::mat4(1.0f);
-        glm::mat4 view = camera.GetViewMatrix();
-        glm::mat4 projection = glm::perspective(glm::radians(camera.Zoom), (float)SCR_WIDTH / (float)SCR_HEIGHT, 0.1f, 100.0f);
-
         // blackhole
-        sphereShader.use();
-        //sphereShader.setMat4("view", camera.GetViewMatrix());
-        //sphereShader.setVec3("cameraPos", camera.Position);
-        sphereShader.setFloat("time", currentFrame);
-        sphereShader.setVec2("resolution", glm::vec2(SCR_WIDTH, SCR_HEIGHT));
-        sphereShader.setFloat("mouseX", lastX);
-        sphereShader.setFloat("mouseY", lastY);
+        BlackHoleShader.use();
+        BlackHoleShader.setFloat("time", currentFrame);
+        BlackHoleShader.setVec2("resolution", glm::vec2(SCR_WIDTH, SCR_HEIGHT));
+        BlackHoleShader.setFloat("mouseX", lastX);
+        BlackHoleShader.setFloat("mouseY", lastY);
         glBindVertexArray(quadVAO);
+        glBindTexture(GL_TEXTURE_2D, colorMap);
         glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
-
-        // skybox
-        glDepthFunc(GL_LEQUAL);
-        skyboxShader.use();
-        model = glm::rotate(model, glm::radians(float(speed * currentFrame)), glm::vec3(0.0, 1.0, 0.0));
-        view = glm::mat4(glm::mat3(camera.GetViewMatrix()));//删除平移
-        skyboxShader.setMat4("model", model);
-        skyboxShader.setMat4("view", view);
-        skyboxShader.setMat4("projection", projection);
-        glBindVertexArray(skyboxVAO);
-        glActiveTexture(GL_TEXTURE0);
-        glBindTexture(GL_TEXTURE_CUBE_MAP, cubemapTexture);
-        glDrawArrays(GL_TRIANGLES, 0, 36);
-        glDepthFunc(GL_LESS);
 
         //渲染gui
         ImGui::Render();
@@ -219,15 +223,6 @@ void processInput(GLFWwindow* window)
 {
     if (glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS)
         glfwSetWindowShouldClose(window, true);
-
-    if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS)
-        camera.ProcessKeyboard(FORWARD, deltaTime);
-    if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS)
-        camera.ProcessKeyboard(BACKWARD, deltaTime);
-    if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS)
-        camera.ProcessKeyboard(LEFT, deltaTime);
-    if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS)
-        camera.ProcessKeyboard(RIGHT, deltaTime);
 }
 
 void mouse_callback(GLFWwindow* window, double xposIn, double yposIn)
@@ -249,9 +244,4 @@ void mouse_callback(GLFWwindow* window, double xposIn, double yposIn)
     lastY = ypos;
 
     camera.ProcessMouseMovement(xoffset, yoffset);
-}
-
-void scroll_callback(GLFWwindow* window, double xoffset, double yoffset)
-{
-    camera.ProcessMouseScroll(static_cast<float>(yoffset));
 }
