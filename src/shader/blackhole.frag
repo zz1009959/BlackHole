@@ -7,9 +7,7 @@ const float INFINITY = 1000000.0;
 out vec4 FragColor;
 
 uniform vec2 resolution; // 视口分辨率（像素）
-//uniform vec3 cameraPos; // 相机位置
 uniform float time; // 时间
-//uniform mat4 view; // 相机的视图矩阵
 
 uniform float mouseX;
 uniform float mouseY;
@@ -26,13 +24,13 @@ uniform float adiskEnabled = 1.0; // 是否启用星盘效果，1.0 为启用，0.0 为禁用
 uniform float adiskParticle = 1.0; // 是否使用颗粒效果，1.0 为使用，0.0 为不使用
 uniform float adiskHeight = 0.2; // 星盘高度
 uniform float adiskLit = 0.5; // 星盘光照强度
-uniform float adiskDensityV = 2.0; // 垂直方向上的星盘密度
-uniform float adiskDensityH = 4.0; // 水平方向上的星盘密度
+uniform float adiskDensityV = 1.0; // 垂直方向上的星盘密度
+uniform float adiskDensityH = 1.0; // 水平方向上的星盘密度
 uniform float adiskNoiseScale = 1.0; // 星盘噪声比例
 uniform float adiskNoiseLOD = 5.0; // 星盘噪声 LOD（细节级别）
 uniform float adiskSpeed = 0.5; // 星盘旋转速度
 
-uniform samplerCube skybox; // 天空盒纹理
+uniform samplerCube galaxy; // 天空盒纹理
 uniform sampler2D colorMap; // 天空盒纹理
 
 struct Sphere
@@ -263,7 +261,7 @@ void ringColor(vec3 rayOrigin, vec3 rayDir, Ring ring, inout float minDistance,
       u += time * ring.rotateSpeed;
 
       // 设置环的基础颜色
-      vec3 color = vec3(0.0, 0.5, 0.0);
+      vec3 color = vec3(0.0, 0.5, 1.0);
       // HACK
       // 设置透明度
       float alpha = 0.5;
@@ -408,11 +406,7 @@ vec3 traceColor(vec3 pos, vec3 dir)
             }
             else
             {
-                // 如果启用了星盘
-                if (adiskEnabled > 0.5)
-                {
-                    adiskColor(pos, color, alpha);
-                }
+                adiskColor(pos, color, alpha);
             }
         }
 
@@ -421,7 +415,7 @@ vec3 traceColor(vec3 pos, vec3 dir)
 
     // 采样天空盒颜色
     dir = rotateVectorUsingRodrigues(dir, vec3(0.0, 1.0, 0.0), time); // 旋转光线方向
-    color += texture(skybox, dir).rgb * alpha; // 添加天空盒颜色
+    color += texture(galaxy, dir).rgb * alpha; // 添加天空盒颜色
     return color; // 返回最终颜色
 }
 
@@ -461,13 +455,30 @@ void main()
     mat3 view; // 视图矩阵
     vec3 cameraPos; // 相机位置
 
-    if(mouseControl>0.5)
+        // 根据控制方式选择相机位置
+    if (mouseControl > 0.5)
     {
+        // 鼠标控制
         vec2 mouse = clamp(vec2(mouseX, mouseY) / resolution.xy, 0.0, 1.0) - 0.5;
-        cameraPos = vec3(-cos(mouse.x * 10.0) * 15.0, mouse.y * 30.0,sin(mouse.x * 10.0) * 15.0);
+        cameraPos = vec3(-cos(mouse.x * 10.0) * 15.0, mouse.y * 30.0,
+                         sin(mouse.x * 10.0) * 15.0);
+    }
+    else if (frontView > 0.5)
+    {
+        // 前视图
+        cameraPos = vec3(10.0, 1.0, 10.0);
+    }
+    else if (topView > 0.5)
+    {
+        // 顶视图
+        cameraPos = vec3(15.0, 15.0, 0.0);
     }
     else
-        cameraPos = vec3(10.0, 1.0, 10.0);
+    {
+        // 默认相机位置
+        cameraPos = vec3(-cos(time * 0.1) * 15.0, sin(time * 0.1) * 15.0,
+                         sin(time * 0.1) * 15.0);
+    }
 
     vec3 target = vec3(0.0, 0.0, 0.0); // 目标位置为原点
     view = lookAt(cameraPos, target, radians(cameraRoll)); // 计算视图矩阵
@@ -494,7 +505,7 @@ void main()
     {
         // 如果光线和球体不相交，计算天空盒的颜色
         //dir = rotateVectorUsingRodrigues(dir, vec3(0.0, 1.0, 0.0), time);
-        vec3 skyboxColor = texture(skybox, dir).rgb;
+        //vec3 skyboxColor = texture(skybox, dir).rgb;
         //FragColor = vec4(skyboxColor, 1.0);
         FragColor.xyz = traceColor(pos,dir);
     }
