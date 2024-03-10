@@ -12,7 +12,6 @@ uniform float time; // 时间
 uniform float mouseX;
 uniform float mouseY;
 uniform float frontView = 0.0; // 前视角标志
-uniform float topView = 0.0; // 顶视角标志
 uniform float cameraRoll = 0.0; // 相机旋转角度
 
 uniform float gravatationalLensing = 1.0; // 引力透镜效应标志
@@ -460,24 +459,17 @@ void main()
     {
         // 鼠标控制
         vec2 mouse = clamp(vec2(mouseX, mouseY) / resolution.xy, 0.0, 1.0) - 0.5;
-        cameraPos = vec3(-cos(mouse.x * 10.0) * 15.0, mouse.y * 30.0,
-                         sin(mouse.x * 10.0) * 15.0);
+        cameraPos = vec3(-cos(mouse.x * 10.0) * 15.0, mouse.y * 30.0,sin(mouse.x * 10.0) * 15.0);
     }
     else if (frontView > 0.5)
     {
         // 前视图
         cameraPos = vec3(10.0, 1.0, 10.0);
     }
-    else if (topView > 0.5)
-    {
-        // 顶视图
-        cameraPos = vec3(15.0, 15.0, 0.0);
-    }
     else
     {
         // 默认相机位置
-        cameraPos = vec3(-cos(time * 0.1) * 15.0, sin(time * 0.1) * 15.0,
-                         sin(time * 0.1) * 15.0);
+        cameraPos = vec3(-cos(time * 0.1) * 15.0, sin(time * 0.1) * 15.0,sin(time * 0.1) * 15.0);
     }
 
     vec3 target = vec3(0.0, 0.0, 0.0); // 目标位置为原点

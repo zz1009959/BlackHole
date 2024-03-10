@@ -13,6 +13,7 @@
 #include"render.h"
 #include"texture.h"
 #include"shader.h"
+#include<tool/shader.h>
 
 #include<iostream>
 
@@ -96,6 +97,7 @@ int main()
 
     //创建窗口对象
     glfwWindowHint(GLFW_DECORATED, GLFW_FALSE); // 配置窗口参数，不显示窗口边框
+    glfwWindowHint(GLFW_SAMPLES, 4);    //多重采样
     GLFWwindow* window = glfwCreateWindow(SCR_WIDTH, SCR_HEIGHT, "BlackHole", NULL, NULL);
     if (window == NULL)
     {
@@ -165,6 +167,8 @@ int main()
     GLuint galaxy = loadCubemap(faces);
     GLuint colorMap = loadTexture("./assets/color_map.png");
 
+    //glEnable(GL_MULTISAMPLE);
+    bool bloom_blur = true;
     while (!glfwWindowShouldClose(window))
     {
         //每帧时间逻辑
@@ -180,26 +184,26 @@ int main()
         ImGui::NewFrame();
 
         ImGui::Begin("ImGui");
+        ImGui::Text("Application average %.3f ms/frame (%.1f FPS)", 1000.0f / ImGui::GetIO().Framerate, ImGui::GetIO().Framerate);
         // 创建颜色纹理
         static GLuint texBlackhole = createColorTexture(SCR_WIDTH, SCR_HEIGHT);
         {
             RenderToTextureInfo rtti;
-            rtti.fragShader = "./src/shader/blackhole.frag"; // 设置着色器程序
-            rtti.cubemapUniforms["galaxy"] = galaxy; // 设置立方贴图的 uniform
-            rtti.textureUniforms["colorMap"] = colorMap; // 设置2D纹理的 uniform
-            rtti.floatUniforms["mouseX"] = mouseX; // 设置鼠标X坐标的 uniform
-            rtti.floatUniforms["mouseY"] = mouseY; // 设置鼠标Y坐标的 uniform
-            rtti.targetTexture = texBlackhole; // 设置目标纹理
-            rtti.width = SCR_WIDTH; // 设置纹理宽度
-            rtti.height = SCR_HEIGHT; // 设置纹理高度
+            rtti.fragShader = "./src/shader/blackhole.frag";
+            rtti.cubemapUniforms["galaxy"] = galaxy;
+            rtti.textureUniforms["colorMap"] = colorMap;
+            rtti.floatUniforms["mouseX"] = mouseX;
+            rtti.floatUniforms["mouseY"] = mouseY;
+            rtti.targetTexture = texBlackhole;
+            rtti.width = SCR_WIDTH;
+            rtti.height = SCR_HEIGHT;
 
-            IMGUI_TOGGLE(gravatationalLensing, true); // 创建并处理 ImGui 的复选框
-            IMGUI_TOGGLE(renderBlackHole, true); // 控制是否启用黑洞渲染
-            IMGUI_TOGGLE(mouseControl, true); // 控制鼠标控制
+            IMGUI_TOGGLE(gravatationalLensing, true);
+            IMGUI_TOGGLE(renderBlackHole, true);
+            IMGUI_TOGGLE(mouseControl, true);
 
-            IMGUI_SLIDER(cameraRoll, 0.0f, -180.0f, 180.0f); //  ImGui 的滑动条
-            IMGUI_TOGGLE(frontView, false); // 控制是否启用前视图
-            IMGUI_TOGGLE(topView, false); // 控制是否启用顶视图
+            IMGUI_SLIDER(cameraRoll, 0.0f, -180.0f, 180.0f);
+            IMGUI_TOGGLE(frontView, false);
             IMGUI_TOGGLE(adiskEnabled, true); // 控制是否启用陨石盘显示
             IMGUI_TOGGLE(adiskParticle, true); // 控制是否启用陨石盘粒子效果显示
 
@@ -211,96 +215,144 @@ int main()
             IMGUI_SLIDER(adiskNoiseScale, 0.8f, 0.0f, 10.0f); // 控制噪音尺度
             IMGUI_SLIDER(adiskSpeed, 0.5f, 0.0f, 1.0f); // 控制陨石盘运动速度
 
-            renderToTexture(rtti); // 渲染到纹理
+            renderToTexture(rtti);
         }
         // 创建用于亮度提取的纹理
         static GLuint texBrightness = createColorTexture(SCR_WIDTH, SCR_HEIGHT);
         {
-            RenderToTextureInfo rtti; // 创建一个渲染到纹理的配置信息结构体
-            rtti.fragShader = "./src/shader/brightness.frag";    // 亮度提取
-            rtti.textureUniforms["texture0"] = texBlackhole;  // 与之前创建的 texBlackhole 绑定
-            rtti.targetTexture = texBrightness;   // 设置渲染操作的目标纹理为 texBrightness
-            rtti.width = SCR_WIDTH;
-            rtti.height = SCR_HEIGHT; // 设置渲染的目标纹理的宽度和高度与屏幕分辨率相同
-            renderToTexture(rtti);    // 使用配置信息 rtti 执行渲染到纹理的操作，将结果存储在 texBrightness 中
-        }
-
-        const int MAX_BLOOM_ITER = 8; // 定义最大的辉光迭代次数，用于控制辉光效果的多层级别
-
-        // 创建用于存储辉光效果的多层纹理数组，包括下采样和上采样阶段的纹理
-        static GLuint texDownsampled[MAX_BLOOM_ITER];
-        static GLuint texUpsampled[MAX_BLOOM_ITER];
-        if (texDownsampled[0] == 0)
-        {
-            // 检查是否已经初始化这些纹理，避免重复创建
-            for (int i = 0; i < MAX_BLOOM_ITER; i++)
-            {
-                // 循环迭代，创建多层纹理
-                texDownsampled[i] = createColorTexture(SCR_WIDTH >> (i + 1), SCR_HEIGHT >> (i + 1));// 创建下采样纹理，尺寸逐级减小
-                texUpsampled[i] = createColorTexture(SCR_WIDTH >> i, SCR_HEIGHT >> i);// 创建一个上采样纹理，尺寸逐级增大
-            }
-        }
-
-        static int bloomIterations = MAX_BLOOM_ITER;  // 控制辉光效果的迭代次数
-        ImGui::SliderInt("bloomIterations", &bloomIterations, 1, 8); // 创建并处理 ImGui 的整数滑动条
-        for (int level = 0; level < bloomIterations; level++)
-        {
-            RenderToTextureInfo rtti; // 创建一个渲染到纹理的配置信息结构体。
-            rtti.fragShader = "./src/shader/bloom_downsample.frag"; // 下采样操作。
-            rtti.textureUniforms["texture0"] = level == 0 ? texBrightness : texDownsampled[level - 1];//与上一级的下采样结果或亮度纹理关联。
-            rtti.targetTexture = texDownsampled[level];   // 设置渲染操作的目标纹理为当前级别的下采样纹理。
-            rtti.width = SCR_WIDTH >> (level + 1);
-            rtti.height = SCR_HEIGHT >> (level + 1);  // 设置渲染的目标纹理的宽度和高度，逐级递减。
-            renderToTexture(rtti);    // 使用配置信息 rtti 执行下采样操作，将结果存储在当前级别的下采样纹理中。
-        }
-
-        // 针对每个辉光级别，逆序循环执行以下操作
-        for (int level = bloomIterations - 1; level >= 0; level--)
-        {
             RenderToTextureInfo rtti;
-            rtti.fragShader = "./src/shader/bloom_upsample.frag"; // 设置上采样着色器程序
-            rtti.textureUniforms["texture0"] = level == bloomIterations - 1
-                ? texDownsampled[level]
-                : texUpsampled[level + 1]; // 设置上采样所需的输入纹理
-            rtti.textureUniforms["texture1"] =
-                level == 0 ? texBrightness : texDownsampled[level - 1]; // 设置亮度纹理
-            rtti.targetTexture = texUpsampled[level]; // 设置目标上采样纹理
-            rtti.width = SCR_WIDTH >> level; // 设置上采样纹理的宽度
-            rtti.height = SCR_HEIGHT >> level; // 设置上采样纹理的高度
-
-            renderToTexture(rtti); // 渲染到上采样纹理
+            rtti.fragShader = "./src/shader/brightness.frag";
+            rtti.textureUniforms["texture0"] = texBlackhole;
+            rtti.targetTexture = texBrightness;
+            rtti.width = SCR_WIDTH;
+            rtti.height = SCR_HEIGHT;
+            IMGUI_SLIDER(brightPassThreshold, 1.0f, 0.1f, 1.0f);
+            renderToTexture(rtti);
         }
 
-        // 创建用于合成辉光效果的最终纹理
-        static GLuint texBloomFinal = createColorTexture(SCR_WIDTH, SCR_HEIGHT);
+        // 高斯模糊实现bloom
+        static GLuint bloom;
+        ImGui::Checkbox("bloom blur", &bloom_blur);
+        if (bloom_blur)
         {
-            RenderToTextureInfo rtti; // 创建一个渲染到纹理的配置信息结构体。
-            rtti.fragShader = "./src/shader/bloom_composite.frag";  // 辉光效果的合成操作。
-            rtti.textureUniforms["texture0"] = texBlackhole;// 与 texBlackhole 绑定，通常是黑洞渲染结果。
-            rtti.textureUniforms["texture1"] = texUpsampled[0];   // 与 texUpsampled[0] 绑定，通常是上采样的辉光效果。
-            rtti.targetTexture = texBloomFinal;   // 设置渲染操作的目标纹理。
-            rtti.width = SCR_WIDTH;
-            rtti.height = SCR_HEIGHT;// 设置渲染的目标纹理的宽度和高度与屏幕分辨率相同。
+            static GLuint ppBuffer[2];
+            bool h = true, first = true;
+            if (ppBuffer[0] == 0)
+            {
+                for (int i = 0; i < 2; i++)
+                {
+                    ppBuffer[i] = createColorTexture(SCR_WIDTH, SCR_HEIGHT);
+                }
+            }
+            static int bloomIterations = 10;
+            ImGui::SliderInt("bloomIterations", &bloomIterations, 5, 20);
+            for (int x = 0; x < bloomIterations; x++)
+            {
+                RenderToTextureInfo rtti;
+                rtti.fragShader = "./src/shader/blur.frag";
+                rtti.floatUniforms["horizontal"] = h;
+                rtti.textureUniforms["image"] = first ? texBrightness : ppBuffer[!h];
+                rtti.targetTexture = ppBuffer[h];
+                rtti.width = SCR_WIDTH;
+                rtti.height = SCR_HEIGHT;
+                renderToTexture(rtti);
+                h = !h;
+                if (first)
+                    first = false;
+            }
+            static GLuint texBloomFinal_blur = createColorTexture(SCR_WIDTH, SCR_HEIGHT);
+            {
+                RenderToTextureInfo rtti;
+                rtti.fragShader = "./src/shader/blur_blend.frag";
+                rtti.textureUniforms["scene"] = texBlackhole;
+                rtti.textureUniforms["bloomBlur"] = ppBuffer[0];
+                rtti.targetTexture = texBloomFinal_blur;
+                rtti.width = SCR_WIDTH;
+                rtti.height = SCR_HEIGHT;
 
-            IMGUI_SLIDER(bloomStrength, 0.1f, 0.0f, 1.0f); // 创建并处理 ImGui 的浮点滑动条
+                IMGUI_SLIDER(bloomStrength, 1.0f, 1.0f, 10.0f);
+                renderToTexture(rtti);
+            }
+            bloom = texBloomFinal_blur;
+        }
 
-            renderToTexture(rtti);// 使用配置信息 rtti 执行辉光效果的合成操作，将结果存储在 texBloomFinal 中。
+        if (!bloom_blur)
+        {
+            const int MAX_BLOOM_ITER = 8; // 定义最大的Bloom迭代次数，用于控制辉光效果的多层级别
+
+            // 创建用于存储Bloom效果的多层纹理数组，包括下采样和上采样阶段的纹理
+            static GLuint texDownsampled[MAX_BLOOM_ITER];
+            static GLuint texUpsampled[MAX_BLOOM_ITER];
+            if (texDownsampled[0] == 0)
+            {
+                // 检查是否已经初始化这些纹理，避免重复创建
+                for (int i = 0; i < MAX_BLOOM_ITER; i++)
+                {
+                    texDownsampled[i] = createColorTexture(SCR_WIDTH >> (i + 1), SCR_HEIGHT >> (i + 1));// 创建下采样纹理，尺寸逐级减小
+                    texUpsampled[i] = createColorTexture(SCR_WIDTH >> i, SCR_HEIGHT >> i);// 创建一个上采样纹理，尺寸逐级增大
+                }
+            }
+
+            static int bloomIterations = MAX_BLOOM_ITER;  // 控制辉光效果的迭代次数
+            ImGui::SliderInt("bloomIterations", &bloomIterations, 1, 8);
+            for (int level = 0; level < bloomIterations; level++)
+            {
+                RenderToTextureInfo rtti;
+                rtti.fragShader = "./src/shader/bloom_downsample.frag";
+                rtti.textureUniforms["texture0"] = level == 0 ? texBrightness : texDownsampled[level - 1];//与上一级的下采样结果或亮度纹理关联。
+                rtti.targetTexture = texDownsampled[level];
+                rtti.width = SCR_WIDTH >> (level + 1);
+                rtti.height = SCR_HEIGHT >> (level + 1);  // 设置渲染的目标纹理的宽度和高度，逐级递减。
+                renderToTexture(rtti);
+            }
+
+            // 针对每个辉光级别，逆序循环执行以下操作
+            for (int level = bloomIterations - 1; level >= 0; level--)
+            {
+                RenderToTextureInfo rtti;
+                rtti.fragShader = "./src/shader/bloom_upsample.frag";
+                rtti.textureUniforms["texture0"] = level == bloomIterations - 1 ? texDownsampled[level] : texUpsampled[level + 1]; // 设置上采样所需的输入纹理
+                rtti.textureUniforms["texture1"] =
+                    level == 0 ? texBrightness : texDownsampled[level - 1];
+                rtti.targetTexture = texUpsampled[level];
+                rtti.width = SCR_WIDTH >> level;
+                rtti.height = SCR_HEIGHT >> level;
+
+                renderToTexture(rtti);
+            }
+
+            // 创建用于合成辉光效果的最终纹理
+            static GLuint texBloomFinal = createColorTexture(SCR_WIDTH, SCR_HEIGHT);
+            {
+                RenderToTextureInfo rtti;
+                rtti.fragShader = "./src/shader/bloom_composite.frag";
+                rtti.textureUniforms["texture0"] = texBlackhole;
+                rtti.textureUniforms["texture1"] = texUpsampled[0];
+                rtti.targetTexture = texBloomFinal;
+                rtti.width = SCR_WIDTH;
+                rtti.height = SCR_HEIGHT;
+
+                IMGUI_SLIDER(bloomStrength, 0.1f, 0.0f, 1.0f);
+
+                renderToTexture(rtti);
+            }
+            bloom = texBloomFinal;
         }
 
         // 创建用于色调映射的最终纹理
         static GLuint texTonemapped = createColorTexture(SCR_WIDTH, SCR_HEIGHT);
         {
-            RenderToTextureInfo rtti; // 创建一个渲染到纹理的配置信息结构体。
-            rtti.fragShader = "./src/shader/tonemapping.frag";  // 色调映射。
-            rtti.textureUniforms["texture0"] = texBloomFinal; //与 texBloomFinal 绑定，合成后的辉光效果图。
-            rtti.targetTexture = texTonemapped;   // 设置渲染操作的目标纹理为 texTonemapped。
+            RenderToTextureInfo rtti;
+            rtti.fragShader = "./src/shader/tonemapping.frag";
+            rtti.textureUniforms["texture0"] = bloom;
+            rtti.targetTexture = texTonemapped;
             rtti.width = SCR_WIDTH;
-            rtti.height = SCR_HEIGHT;// 设置渲染的目标纹理的宽度和高度与屏幕分辨率相同。
+            rtti.height = SCR_HEIGHT;
 
-            IMGUI_TOGGLE(tonemappingEnabled, true); // 创建并处理 ImGui 的复选框
-            IMGUI_SLIDER(gamma, 2.5f, 1.0f, 4.0f); // 创建并处理 ImGui 的浮点滑动条
+            IMGUI_TOGGLE(tonemappingEnabled, true);
+            IMGUI_SLIDER(gamma, 2.5f, 1.0f, 4.0f);
 
-            renderToTexture(rtti);    // 使用配置信息 rtti 执行色调映射操作，将结果存储在 texTonemapped 中。
+            renderToTexture(rtti);
         }
 
         passthrough.render(texTonemapped); // 渲染后期处理效果到屏幕

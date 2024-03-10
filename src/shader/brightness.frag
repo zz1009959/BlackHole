@@ -3,8 +3,8 @@
 uniform sampler2D texture0; // 纹理采样器
 uniform vec2 resolution; // 视口分辨率（像素）
 
-const float brightPassThreshold = 1.0; // 亮度阈值
-const vec3 luminanceVector = vec3(0.2125, 0.7154, 0.0721); // 亮度向量
+uniform float brightPassThreshold = 1.0; // 亮度阈值
+const vec3 luminanceVector = vec3(0.2126, 0.7152, 0.0722); // 亮度向量
 
 out vec4 fragColor; // 输出颜色
 

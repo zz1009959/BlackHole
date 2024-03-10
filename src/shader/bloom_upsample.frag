@@ -14,9 +14,9 @@ void main() {
     vec4 o = inputTexelSize.xyxy * vec4(-1.0, -1.0, 1.0, 1.0); // 偏移量
 
     // 对四个相邻像素进行采样并计算平均值，然后加上纹理1的颜色值
-    FragColor =
-        0.25 * (texture(texture0, uv + o.xy) + texture(texture0, uv + o.zy) +
+    FragColor = 0.25 * (texture(texture0, uv + o.xy) + texture(texture0, uv + o.zy) +
                 texture(texture0, uv + o.xw) + texture(texture0, uv + o.zw));
+
     FragColor += texture(texture1, uv);
 
     FragColor.a = 1.0;
