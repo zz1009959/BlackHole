@@ -167,8 +167,10 @@ int main()
     GLuint galaxy = loadCubemap(faces);
     GLuint colorMap = loadTexture("./assets/color_map.png");
 
-    //glEnable(GL_MULTISAMPLE);
-    bool bloom_blur = true;
+    bool Gaussian_Blur = false;
+    bool msaa = true;
+    if (msaa)
+        glEnable(GL_MULTISAMPLE);
     while (!glfwWindowShouldClose(window))
     {
         //每帧时间逻辑
@@ -185,6 +187,7 @@ int main()
 
         ImGui::Begin("ImGui");
         ImGui::Text("Application average %.3f ms/frame (%.1f FPS)", 1000.0f / ImGui::GetIO().Framerate, ImGui::GetIO().Framerate);
+        ImGui::Checkbox("MSAA ON", &msaa);
         // 创建颜色纹理
         static GLuint texBlackhole = createColorTexture(SCR_WIDTH, SCR_HEIGHT);
         {
@@ -203,6 +206,8 @@ int main()
             IMGUI_TOGGLE(mouseControl, true);
 
             IMGUI_SLIDER(cameraRoll, 0.0f, -180.0f, 180.0f);
+            IMGUI_SLIDER(scale, 1.5f, 1.0f, 2.0f);      //黑洞
+            IMGUI_SLIDER(fovScale, 1.0f, 1.0f, 2.0f);   //视角
             IMGUI_TOGGLE(frontView, false);
             IMGUI_TOGGLE(adiskEnabled, true); // 控制是否启用陨石盘显示
             IMGUI_TOGGLE(adiskParticle, true); // 控制是否启用陨石盘粒子效果显示
@@ -232,8 +237,8 @@ int main()
 
         // 高斯模糊实现bloom
         static GLuint bloom;
-        ImGui::Checkbox("bloom blur", &bloom_blur);
-        if (bloom_blur)
+        ImGui::Checkbox("Gaussian Blur", &Gaussian_Blur);
+        if (Gaussian_Blur)
         {
             static GLuint ppBuffer[2];
             bool h = true, first = true;
@@ -276,7 +281,7 @@ int main()
             bloom = texBloomFinal_blur;
         }
 
-        if (!bloom_blur)
+        if (!Gaussian_Blur)
         {
             const int MAX_BLOOM_ITER = 8; // 定义最大的Bloom迭代次数，用于控制辉光效果的多层级别
 

@@ -18,6 +18,7 @@ uniform float gravatationalLensing = 1.0; // 引力透镜效应标志
 uniform float renderBlackHole = 1.0; // 渲染黑洞标志
 uniform float mouseControl = 1.0; // 鼠标控制标志
 uniform float fovScale = 1.0; // 视场缩放因子
+uniform float scale = 1.5; // 施瓦西缩放因子
 
 uniform float adiskEnabled = 1.0; // 是否启用星盘效果，1.0 为启用，0.0 为禁用
 uniform float adiskParticle = 1.0; // 是否使用颗粒效果，1.0 为使用，0.0 为不使用
@@ -173,7 +174,7 @@ vec3 accel(float h2, vec3 pos)
 {
   float r2 = dot(pos, pos);
   float r5 = pow(r2, 2.5);
-  vec3 acc = -1.5 * h2 * pos / r5 * 1.0;
+  vec3 acc = -scale * h2 * pos / r5 * 1.0;
   return acc;
 }
 
