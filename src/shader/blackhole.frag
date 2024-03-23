@@ -31,7 +31,7 @@ uniform float adiskNoiseLOD = 5.0; // 星盘噪声 LOD（细节级别）
 uniform float adiskSpeed = 0.5; // 星盘旋转速度
 
 uniform samplerCube galaxy; // 天空盒纹理
-uniform sampler2D colorMap; // 天空盒纹理
+uniform sampler2D colorMap; // 吸积盘纹理
 
 struct Sphere
 {
@@ -92,7 +92,6 @@ float snoise(vec3 v)
                    i.x + vec4(0.0, i1.x, i2.x, 1.0));
 
   // Gradients
-  // 计算梯度
   // ( N*N points uniformly over a square, mapped onto an octahedron.)
   float n_ = 1.0 / 7.0; // N=7
   vec3 ns = n_ * D.wyz - D.xzx;
@@ -136,7 +135,6 @@ float snoise(vec3 v)
   return 42.0 *
          dot(m * m, vec4(dot(p0, x0), dot(p1, x1), dot(p2, x2), dot(p3, x3)));
 }
-///----
 
 // 计算射线与环结相交的距离
 float ringDistance(vec3 rayOrigin, vec3 rayDir, Ring ring)
@@ -207,16 +205,15 @@ vec3 rotateVectorUsingQuaternion(vec3 position, vec3 axis, float angle)
         q_tmp.w * qr_conj.w - q_tmp.x * qr_conj.x - q_tmp.y * qr_conj.y - q_tmp.z * qr_conj.z
     );
 
-    // 返回结果向量
     return result.xyz;
 }
 // 罗德里格斯公式
 vec3 rotateVectorUsingRodrigues(vec3 position, vec3 axis, float angle)
 {
-    // 将角度转换为弧度
+    // 转换为弧度
     float radians = angle * PI / 180.0;
 
-    // 计算旋转后的向量
+    // 旋转后的向量
     vec3 rotatedVector = position * cos(radians) +
                          cross(axis, position) * sin(radians) +
                          axis * dot(axis, position) * (1.0 - cos(radians));
@@ -227,43 +224,37 @@ vec3 rotateVectorUsingRodrigues(vec3 position, vec3 axis, float angle)
 void ringColor(vec3 rayOrigin, vec3 rayDir, Ring ring, inout float minDistance,
                inout vec3 color)
 {
-  // 计算射线与环的交点距离
+  // 射线与环的交点距离
   float distance = ringDistance(rayOrigin, normalize(rayDir), ring);
   // 如果交点距离在合理范围内
   if (distance >= EPSILON && distance < minDistance && distance <= length(rayDir) + EPSILON)
   {
-    // 更新最小距离
     minDistance = distance;
 
-    // 计算交点坐标
+    // 交点坐标
     vec3 intersection = rayOrigin + normalize(rayDir) * minDistance;
     vec3 ringColor;
 
-    // 计算环的颜色
+    // 环的颜色
     {
-      // 计算交点到原点的距离
+      // 交点到原点的距离
       float dist = length(intersection);
 
-      // 计算环上的垂直参数v
+      // 环上的垂直参数v
       float v = clamp((dist - ring.innerRadius) /
                           (ring.outerRadius - ring.innerRadius),
                       0.0, 1.0);
 
-      // 计算环上的水平参数u
+      // 环上的水平参数u
       vec3 base = cross(ring.normal, vec3(0.0, 0.0, 1.0));
       float angle = acos(dot(normalize(base), normalize(intersection)));
       if (dot(cross(base, intersection), ring.normal) < 0.0)
         angle = -angle;
 
       float u = 0.5 - 0.5 * angle / PI;
-      // HACK
-      // 水平参数u随时间变化
       u += time * ring.rotateSpeed;
 
-      // 设置环的基础颜色
       vec3 color = vec3(0.0, 0.5, 1.0);
-      // HACK
-      // 设置透明度
       float alpha = 0.5;
       ringColor = vec3(color);
     }
@@ -271,15 +262,6 @@ void ringColor(vec3 rayOrigin, vec3 rayDir, Ring ring, inout float minDistance,
     // 将环的颜色加到最终颜色上
     color += ringColor;
   }
-}
-
-// 根据方向向量获取全景图中的颜色
-vec3 panoramaColor(sampler2D tex, vec3 dir)
-{
-  // 计算球坐标系下的纹理坐标
-    vec2 uv = vec2(0.5 - atan(dir.z, dir.x) / PI * 0.5, 0.5 - asin(dir.y) / PI);
-    // 使用球坐标系下的纹理坐标获取纹理颜色并返回
-    return texture2D(tex, uv).rgb;
 }
 
 float sqrLength(vec3 a)
@@ -290,11 +272,11 @@ float sqrLength(vec3 a)
 vec3 toSpherical(vec3 p)
 {
 
-  float rho = sqrt((p.x * p.x) + (p.y * p.y) + (p.z * p.z));// 计算球坐标中的径向距离 rho
-  float theta = atan(p.z, p.x);// 计算球坐标中的方位角 theta
-  float phi = asin(p.y / rho);// 计算球坐标中的极角 phi
+  float rho = sqrt((p.x * p.x) + (p.y * p.y) + (p.z * p.z));// 径向距离
+  float theta = atan(p.z, p.x);// 方位角 theta
+  float phi = asin(p.y / rho);// 极角 phi
 
-  return vec3(rho, theta, phi);// 返回球坐标
+  return vec3(rho, theta, phi);
 }
 
 void adiskColor(vec3 pos, inout vec3 color, inout float alpha)
@@ -359,19 +341,19 @@ void adiskColor(vec3 pos, inout vec3 color, inout float alpha)
 
 vec3 traceColor(vec3 pos, vec3 dir)
 {
-    // 初始化颜色和透明度
+    // 初始颜色和透明度
     vec3 color = vec3(0.0);
     float alpha = 1.0;
 
-    // 设置步长
+    // 步长
     float STEP_SIZE = 0.1;
     dir *= STEP_SIZE;
 
-    // 计算初始值
+    // 初始值
     vec3 h = cross(pos, dir);
     float h2 = dot(h, h);
 
-    // 迭代光线追踪
+    // 光线追踪
     for (int i = 0; i < 300; i++)
     {
         // 如果启用了黑洞渲染
@@ -388,7 +370,7 @@ vec3 traceColor(vec3 pos, vec3 dir)
             // 到达事件视界
             if (dot(pos, pos) < 1.0)
             {
-                return color; // 返回颜色
+                return color;
             }
 
             float minDistance = INFINITY;
@@ -415,16 +397,16 @@ vec3 traceColor(vec3 pos, vec3 dir)
 
     // 采样天空盒颜色
     dir = rotateVectorUsingRodrigues(dir, vec3(0.0, 1.0, 0.0), time); // 旋转光线方向
-    color += texture(galaxy, dir).rgb * alpha; // 添加天空盒颜色
-    return color; // 返回最终颜色
+    color += texture(galaxy, dir).rgb * alpha; // 天空盒颜色
+    return color;
 }
 
 mat3 lookAt(vec3 origin, vec3 target, float roll)
 {
-    vec3 right = vec3(sin(roll), cos(roll), 0.0);// 计算观察方向的右向量，即观察者位置到目标位置的方向
-    vec3 front = normalize(target - origin);// 计算观察方向的正向向量
-    vec3 up = normalize(cross(front, right));// 计算观察方向的上向量，通过叉乘得到
-    vec3 v = normalize(cross(up, front));// 计算观察方向的侧向向量，通过叉乘得到
+    vec3 right = vec3(sin(roll), cos(roll), 0.0);
+    vec3 front = normalize(target - origin);
+    vec3 up = normalize(cross(front, right));
+    vec3 v = normalize(cross(up, front));
     return mat3(up, v, front);
 }
 

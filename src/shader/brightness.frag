@@ -1,7 +1,7 @@
 #version 460 core
 
-uniform sampler2D texture0; // 纹理采样器
-uniform vec2 resolution; // 视口分辨率（像素）
+uniform sampler2D texture0;
+uniform vec2 resolution;
 
 uniform float brightPassThreshold = 1.0; // 亮度阈值
 const vec3 luminanceVector = vec3(0.2126, 0.7152, 0.0722); // 亮度向量

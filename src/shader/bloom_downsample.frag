@@ -1,11 +1,11 @@
 #version 460 core
 
-in vec2 uv; // 输入纹理坐标
+in vec2 uv;
 
-out vec4 FragColor; // 输出颜色
+out vec4 FragColor;
 
-uniform vec2 resolution; // 分辨率
-uniform sampler2D texture0; // 输入颜色纹理
+uniform vec2 resolution;
+uniform sampler2D texture0;
 
 void main()
 {
